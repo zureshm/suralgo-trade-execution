@@ -18,9 +18,7 @@ async function login(req, res) {
 
     res.json({
       ...result,
-      availableCash: funds?.availableCash ?? 0,
-      marginUsed: funds?.marginUsed ?? 0,
-      availableToTrade: funds?.availableToTrade ?? 0,
+      funds: funds || null,
     });
   } catch (error) {
     logger.error("Auth login endpoint failed", { message: error.message });

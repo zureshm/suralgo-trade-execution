@@ -36,8 +36,16 @@ async function login({ apiKey, clientCode, password, totpSecret } = {}) {
       totp
     );
 
+    logger.info("Angel One login response", {
+      status: session?.status,
+      message: session?.message,
+      hasData: !!session?.data,
+      hasJwt: !!session?.data?.jwtToken,
+    });
+
     if (!session || !session.data || !session.data.jwtToken) {
-      throw new Error("Login failed — no JWT token in response");
+      const reason = session?.message || "no JWT token in response";
+      throw new Error("Login failed — " + reason);
     }
 
     sessionData = session.data;
@@ -101,6 +109,8 @@ async function getFunds() {
   try {
     const response = await api.getRMS();
 
+    logger.info("getRMS raw response", JSON.stringify(response));
+
     if (!response || !response.data) {
       return {
         success: true,
@@ -112,16 +122,18 @@ async function getFunds() {
     }
 
     const d = response.data;
-    const availableCash = parseFloat(d.availablecash || d.net || "0");
-    const marginUsed = parseFloat(d.utiliseddebits || d.utilisedmargin || "0");
-    const availableToTrade = parseFloat(d.availableintradaypayin || d.availablecash || "0");
 
     return {
       success: true,
-      availableCash,
-      marginUsed,
-      availableToTrade,
-      raw: response,
+      net: parseFloat(d.net || "0"),
+      availableCash: parseFloat(d.availablecash || "0"),
+      availableIntradayPayin: parseFloat(d.availableintradaypayin || "0"),
+      availableLimitMargin: parseFloat(d.availablelimitmargin || "0"),
+      collateral: parseFloat(d.collateral || "0"),
+      m2mUnrealized: parseFloat(d.m2munrealized || "0"),
+      m2mRealized: parseFloat(d.m2mrealized || "0"),
+      utilisedDebits: parseFloat(d.utiliseddebits || "0"),
+      utilisedPayout: parseFloat(d.utilisedpayout || "0"),
     };
   } catch (error) {
     logger.error("Get funds failed", { message: error.message });
