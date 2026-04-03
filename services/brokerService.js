@@ -7,20 +7,32 @@ let smartApi = null;
 let sessionData = null;
 let isLoggedIn = false;
 let loginTime = null;
+let activeClientCode = null;
+let activeApiKey = null;
 
 // ── Login ────────────────────────────────────────────────────────────────────
 
-async function login() {
+async function login({ apiKey, clientCode, password, totpSecret } = {}) {
   try {
+    // Use provided credentials, fall back to .env
+    const _apiKey = apiKey || process.env.ANGEL_API_KEY;
+    const _clientCode = clientCode || process.env.ANGEL_CLIENT_CODE;
+    const _password = password || process.env.ANGEL_PASSWORD;
+    const _totpSecret = totpSecret || process.env.ANGEL_TOTP_SECRET;
+
+    if (!_apiKey || !_clientCode || !_password || !_totpSecret) {
+      throw new Error("Missing credentials — apiKey, clientCode, password, and totpSecret are all required");
+    }
+
     smartApi = new SmartAPI({
-      api_key: process.env.ANGEL_API_KEY,
+      api_key: _apiKey,
     });
 
-    const totp = authenticator.generate(process.env.ANGEL_TOTP_SECRET);
+    const totp = authenticator.generate(_totpSecret);
 
     const session = await smartApi.generateSession(
-      process.env.ANGEL_CLIENT_CODE,
-      process.env.ANGEL_PASSWORD,
+      _clientCode,
+      _password,
       totp
     );
 
@@ -31,20 +43,24 @@ async function login() {
     sessionData = session.data;
     isLoggedIn = true;
     loginTime = new Date().toISOString();
+    activeClientCode = _clientCode;
+    activeApiKey = _apiKey;
 
     logger.info("Broker login success", {
-      clientCode: process.env.ANGEL_CLIENT_CODE,
+      clientCode: _clientCode,
       loginTime,
     });
 
     return {
       success: true,
-      clientCode: process.env.ANGEL_CLIENT_CODE,
+      clientCode: _clientCode,
       loginTime,
     };
   } catch (error) {
     isLoggedIn = false;
     sessionData = null;
+    activeClientCode = null;
+    activeApiKey = null;
     logger.error("Broker login failed", { message: error.message });
     throw error;
   }
@@ -56,9 +72,61 @@ function getStatus() {
   return {
     isLoggedIn,
     broker: process.env.BROKER || "angel",
-    clientCode: process.env.ANGEL_CLIENT_CODE || null,
+    clientCode: isLoggedIn ? activeClientCode : null,
     loginTime,
   };
+}
+
+// ── Logout ──────────────────────────────────────────────────────────────────
+
+function logout() {
+  const wasLoggedIn = isLoggedIn;
+  smartApi = null;
+  sessionData = null;
+  isLoggedIn = false;
+  loginTime = null;
+  activeClientCode = null;
+  activeApiKey = null;
+
+  logger.info("Broker session logged out", { wasLoggedIn });
+
+  return { success: true, message: "Logged out" };
+}
+
+// ── Account Funds (RMS) ─────────────────────────────────────────────────────
+
+async function getFunds() {
+  const api = await ensureSession();
+
+  try {
+    const response = await api.getRMS();
+
+    if (!response || !response.data) {
+      return {
+        success: true,
+        availableCash: 0,
+        marginUsed: 0,
+        availableToTrade: 0,
+        raw: response,
+      };
+    }
+
+    const d = response.data;
+    const availableCash = parseFloat(d.availablecash || d.net || "0");
+    const marginUsed = parseFloat(d.utiliseddebits || d.utilisedmargin || "0");
+    const availableToTrade = parseFloat(d.availableintradaypayin || d.availablecash || "0");
+
+    return {
+      success: true,
+      availableCash,
+      marginUsed,
+      availableToTrade,
+      raw: response,
+    };
+  } catch (error) {
+    logger.error("Get funds failed", { message: error.message });
+    throw error;
+  }
 }
 
 // ── Ensure logged in (auto-login if needed) ──────────────────────────────────
@@ -283,7 +351,9 @@ function mapProductType(type) {
 
 module.exports = {
   login,
+  logout,
   getStatus,
+  getFunds,
   ensureSession,
   placeOrder,
   exitOrder,

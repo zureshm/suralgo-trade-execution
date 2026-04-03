@@ -56,7 +56,9 @@ app.listen(PORT, () => {
   logger.info(`Trade execution server running at http://localhost:${PORT}`);
   logger.info("Endpoints:");
   logger.info("  POST /auth/login");
+  logger.info("  POST /auth/logout");
   logger.info("  GET  /auth/status");
+  logger.info("  GET  /auth/funds");
   logger.info("  POST /orders/place");
   logger.info("  POST /orders/exit");
   logger.info("  POST /orders/cancel");
