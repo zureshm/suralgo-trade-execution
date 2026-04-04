@@ -52,7 +52,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
+const http = require("http");
+const server = http.createServer(app);
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    logger.error(`Port ${PORT} is already in use. Kill the other process or change PORT in .env`);
+  } else {
+    logger.error("Server error", { message: err.message });
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, () => {
   logger.info(`Trade execution server running at http://localhost:${PORT}`);
   logger.info("Endpoints:");
   logger.info("  POST /auth/login");
