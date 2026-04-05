@@ -5,7 +5,7 @@ const logger = require("../utils/logger");
 // POST /orders/place
 async function placeOrder(req, res) {
   try {
-    const { symbol, qty, side, orderType, productType, price, triggerPrice } = req.body;
+    const { symbol, qty, side, orderType, productType, price, triggerPrice, symbolToken } = req.body;
 
     // Validate
     const validation = validatePlaceOrder({ symbol, qty, side, orderType, productType });
@@ -25,6 +25,7 @@ async function placeOrder(req, res) {
       productType: (productType || "INTRADAY").toUpperCase(),
       price: price || "0",
       triggerPrice: triggerPrice || "0",
+      symbolToken: symbolToken || "",
     });
 
     // Record for duplicate detection
