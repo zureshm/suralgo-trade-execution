@@ -2,6 +2,39 @@ const { SmartAPI } = require("smartapi-javascript");
 const { authenticator } = require("otplib");
 const logger = require("../utils/logger");
 
+// Angel-feed base URL (port 2000) for symbol-token resolution
+const ANGEL_FEED_URL = "http://localhost:2000";
+
+// In-memory symbol → token cache (populated from angel-feed lookups)
+const symbolTokenCache = {};
+
+// Resolve symboltoken for a trading symbol via angel-feed
+async function resolveSymbolToken(symbol) {
+  if (symbolTokenCache[symbol]) {
+    return symbolTokenCache[symbol];
+  }
+
+  try {
+    const res = await fetch(`${ANGEL_FEED_URL}/watchlist?q=${encodeURIComponent(symbol)}`);
+    const results = await res.json();
+
+    if (Array.isArray(results)) {
+      const exact = results.find((r) => r.symbol === symbol);
+      if (exact && exact.token) {
+        symbolTokenCache[symbol] = String(exact.token);
+        logger.info("Resolved symboltoken", { symbol, token: exact.token });
+        return symbolTokenCache[symbol];
+      }
+    }
+
+    logger.warn("Could not resolve symboltoken from angel-feed", { symbol });
+    return "";
+  } catch (error) {
+    logger.error("Failed to resolve symboltoken", { symbol, message: error.message });
+    return "";
+  }
+}
+
 // Broker session state
 let smartApi = null;
 let sessionData = null;
@@ -152,12 +185,22 @@ async function ensureSession() {
 
 // ── Place Order ──────────────────────────────────────────────────────────────
 
-async function placeOrder({ symbol, qty, side, orderType, productType, price, triggerPrice }) {
+async function placeOrder({ symbol, qty, side, orderType, productType, price, triggerPrice, symbolToken }) {
   const api = await ensureSession();
 
   const variety = "NORMAL";
   const exchange = "NFO";
   const tradingSymbol = symbol;
+
+  // Resolve symboltoken — use provided value, cache, or fetch from angel-feed
+  let resolvedToken = symbolToken || symbolTokenCache[symbol] || "";
+  if (!resolvedToken) {
+    resolvedToken = await resolveSymbolToken(symbol);
+  }
+
+  if (!resolvedToken) {
+    throw new Error(`Cannot place order — symboltoken not found for ${symbol}`);
+  }
 
   // Map friendly names to Angel API values
   const orderSide = side === "BUY" ? "BUY" : "SELL";
@@ -171,7 +214,7 @@ async function placeOrder({ symbol, qty, side, orderType, productType, price, tr
   const orderParams = {
     variety,
     tradingsymbol: tradingSymbol,
-    symboltoken: "", // Will be resolved if needed
+    symboltoken: resolvedToken,
     transactiontype: orderSide,
     exchange,
     ordertype: angelOrderType,
