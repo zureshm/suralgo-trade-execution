@@ -11,11 +11,12 @@ const positionRoutes = require("./routes/positionRoutes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Middleware FUCK
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:4200",
-  "https://suralgo-frontend.vercel.app"
+  "http://209.38.126.3:3000",
+  "https://suralgo.duckdns.org"
 ];
 
 app.use(cors({
