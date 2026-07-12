@@ -8,6 +8,12 @@ const ANGEL_FEED_URL = "http://localhost:2000";
 // In-memory symbol → token cache (populated from angel-feed lookups)
 const symbolTokenCache = {};
 
+// Infer exchange from symbol name: SENSEX options → BFO, everything else → NFO
+function getExchangeForSymbol(symbol) {
+  if (symbol && symbol.startsWith("SENSEX")) return "BFO";
+  return "NFO";
+}
+
 // Resolve symboltoken for a trading symbol via angel-feed
 async function resolveSymbolToken(symbol) {
   if (symbolTokenCache[symbol]) {
@@ -185,11 +191,11 @@ async function ensureSession() {
 
 // ── Place Order ──────────────────────────────────────────────────────────────
 
-async function placeOrder({ symbol, qty, side, orderType, productType, price, triggerPrice, symbolToken }) {
+async function placeOrder({ symbol, qty, side, orderType, productType, price, triggerPrice, symbolToken, exchange: providedExchange }) {
   const api = await ensureSession();
 
   const variety = "NORMAL";
-  const exchange = "NFO";
+  const exchange = providedExchange || getExchangeForSymbol(symbol);
   const tradingSymbol = symbol;
 
   // Resolve symboltoken — use provided value, cache, or fetch from angel-feed
@@ -266,6 +272,7 @@ async function exitOrder({ symbol, qty, side }) {
     side: exitSide,
     orderType: "MARKET",
     productType: "INTRADAY",
+    exchange: getExchangeForSymbol(symbol),
   });
 }
 
